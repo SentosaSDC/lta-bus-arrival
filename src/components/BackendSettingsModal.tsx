@@ -38,27 +38,58 @@ export function BackendSettingsModal({ isOpen, onClose, onConfigUpdated }: Props
     }
 
     setTestStatus('testing');
-    setTestMessage('Testing connection to endpoint...');
+    setTestMessage('Testing connection to serverless endpoint...');
 
     try {
-      const url = `${config.backendEndpoint}?BusStopCode=09048`;
+      const url = `${config.backendEndpoint}?BusStopCode=83139`;
       const headers: Record<string, string> = { 'Accept': 'application/json' };
       if (config.ltaAccountKey) {
         headers['AccountKey'] = config.ltaAccountKey;
       }
 
       const res = await fetch(url, { headers });
+      const json = await res.json();
+      
       if (res.ok) {
-        const json = await res.json();
         setTestStatus('success');
-        setTestMessage(`Connected successfully! Received ${json.Services?.length || 0} bus services from backend.`);
+        setTestMessage(
+          `Connected to ${config.backendEndpoint}! Received ${json.Services?.length || 0} bus services for BusStopCode ${json.BusStopCode || '83139'}.`
+        );
+      } else if (res.status === 401 && json.error?.includes('LTA_ACCOUNT_KEY')) {
+        setTestStatus('error');
+        setTestMessage(
+          `Serverless endpoint reachable at ${config.backendEndpoint}! Note: LTA_ACCOUNT_KEY is not yet configured in environment variables.`
+        );
       } else {
         setTestStatus('error');
-        setTestMessage(`Server returned HTTP ${res.status} (${res.statusText}).`);
+        setTestMessage(
+          json.message || `Server returned HTTP ${res.status} (${res.statusText}).`
+        );
       }
     } catch (err: any) {
       setTestStatus('error');
       setTestMessage(err.message || 'Network error connecting to backend endpoint.');
+    }
+  };
+
+  const handleTestHealth = async () => {
+    setTestStatus('testing');
+    setTestMessage('Testing /api/health endpoint...');
+    try {
+      const res = await fetch('/api/health');
+      const data = await res.json();
+      if (res.ok && data.status === 'ok') {
+        setTestStatus('success');
+        setTestMessage(
+          `/api/health is online! Service: ${data.service}. LTA Key Configured: ${data.ltaConfigured ? 'Yes (Active)' : 'No (Pending user key)'}`
+        );
+      } else {
+        setTestStatus('error');
+        setTestMessage(`Health check returned status ${res.status}`);
+      }
+    } catch (err: any) {
+      setTestStatus('error');
+      setTestMessage(err.message || 'Failed to reach /api/health');
     }
   };
 
@@ -168,10 +199,19 @@ export function BackendSettingsModal({ isOpen, onClose, onConfigUpdated }: Props
                   type="button"
                   onClick={handleTestBackend}
                   disabled={testStatus === 'testing'}
-                  className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-2 transition-colors"
+                  className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-2 transition-colors cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${testStatus === 'testing' ? 'animate-spin text-emerald-400' : ''}`} />
-                  Test Connection
+                  Test LTA Bus Arrival
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTestHealth}
+                  disabled={testStatus === 'testing'}
+                  className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-xs font-medium text-slate-300 border border-slate-700 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  Check /api/health
                 </button>
               </div>
             </div>

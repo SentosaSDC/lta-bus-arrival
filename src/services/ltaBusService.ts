@@ -12,7 +12,7 @@ export function getStoredBackendConfig(): BackendConfig {
   }
   return {
     mode: 'simulator',
-    backendEndpoint: '/api/bus-arrival',
+    backendEndpoint: '/api/busarrival',
   };
 }
 
