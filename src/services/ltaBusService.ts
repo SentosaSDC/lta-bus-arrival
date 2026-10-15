@@ -122,36 +122,41 @@ export function computeLiveBusPosition(
   secondsAway: number,
   serviceSeed: number
 ): { lat: number; lng: number; bearing: number; speed: number } {
+  const validLat = Number.isFinite(stopLat) ? stopLat : 1.3521;
+  const validLng = Number.isFinite(stopLng) ? stopLng : 103.8198;
+  const validSec = Number.isFinite(secondsAway) ? Math.max(0, secondsAway) : 0;
+  const validSeed = Number.isFinite(serviceSeed) ? serviceSeed : 1;
+
   // If arrived, sit at or very near stop
-  if (secondsAway <= 0) {
+  if (validSec <= 0) {
     return {
-      lat: stopLat + (Math.sin(serviceSeed) * 0.00008),
-      lng: stopLng + (Math.cos(serviceSeed) * 0.00008),
-      bearing: (serviceSeed * 45) % 360,
+      lat: validLat + (Math.sin(validSeed) * 0.00008),
+      lng: validLng + (Math.cos(validSeed) * 0.00008),
+      bearing: (validSeed * 45) % 360,
       speed: 0,
     };
   }
 
   // Approach vector along an angle seeded by service
-  const approachAngleRad = ((serviceSeed * 77) % 360) * (Math.PI / 180);
+  const approachAngleRad = ((validSeed * 77) % 360) * (Math.PI / 180);
   // Speed is ~35 km/h -> 9.7 meters per second
-  const distanceMeters = Math.min(secondsAway * 9.7, 4500);
+  const distanceMeters = Math.min(validSec * 9.7, 4500);
   
   // 1 degree lat approx 111,000 m, lng approx 111,000 * cos(1.3 deg) ~ 111,000 m
   const deltaLat = (distanceMeters / 111000) * Math.cos(approachAngleRad);
   const deltaLng = (distanceMeters / 111000) * Math.sin(approachAngleRad);
 
-  const busLat = stopLat - deltaLat;
-  const busLng = stopLng - deltaLng;
+  const busLat = validLat - deltaLat;
+  const busLng = validLng - deltaLng;
 
   // Bearing towards stop
   const bearingDeg = (approachAngleRad * (180 / Math.PI) + 360) % 360;
 
   return {
-    lat: busLat,
-    lng: busLng,
+    lat: Number.isFinite(busLat) ? busLat : validLat,
+    lng: Number.isFinite(busLng) ? busLng : validLng,
     bearing: Math.round(bearingDeg),
-    speed: secondsAway > 15 ? 38 + (serviceSeed % 12) : 18,
+    speed: validSec > 15 ? 38 + (validSeed % 12) : 18,
   };
 }
 

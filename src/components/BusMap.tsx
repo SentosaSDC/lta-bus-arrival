@@ -53,7 +53,7 @@ export function BusMap({
   const polylineRef = useRef<L.Polyline | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
 
-  // Initialize Map
+  // Initialize Map & ResizeObserver
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
@@ -73,7 +73,19 @@ export function BusMap({
 
     mapInstanceRef.current = map;
 
+    // Observe container size to invalidate size when tab switches or layout resizes
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && mapContainerRef.current) {
+      ro = new ResizeObserver(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+        }
+      });
+      ro.observe(mapContainerRef.current);
+    }
+
     return () => {
+      if (ro) ro.disconnect();
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -95,6 +107,8 @@ export function BusMap({
 
     // Add or update markers
     stops.forEach((stop) => {
+      if (!Number.isFinite(stop.Latitude) || !Number.isFinite(stop.Longitude)) return;
+
       const isSelected = selectedStop?.BusStopCode === stop.BusStopCode;
       let marker = stopMarkersRef.current.get(stop.BusStopCode);
 
@@ -143,7 +157,7 @@ export function BusMap({
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    if (userCoords) {
+    if (userCoords && Number.isFinite(userCoords.lat) && Number.isFinite(userCoords.lng)) {
       const html = `
         <div class="relative -translate-x-1/2 -translate-y-1/2">
           <div class="absolute -inset-3 rounded-full bg-cyan-500/30 bus-pulse-ring"></div>
@@ -185,6 +199,8 @@ export function BusMap({
 
     // Update or add live bus markers
     liveBuses.forEach((bus) => {
+      if (!Number.isFinite(bus.lat) || !Number.isFinite(bus.lng)) return;
+
       const isFocused = focusedBusId === bus.id;
       const loadColor = getLoadColor(bus.load);
       const isArrived = bus.secondsAway <= 5;
@@ -240,8 +256,11 @@ export function BusMap({
     });
 
     // Draw trajectory polyline from focused bus or nearest bus to selected stop
-    if (selectedStop) {
-      const activeBus = liveBuses.find((b) => b.id === focusedBusId) || liveBuses[0];
+    if (selectedStop && Number.isFinite(selectedStop.Latitude) && Number.isFinite(selectedStop.Longitude)) {
+      const activeBus =
+        liveBuses.find((b) => b.id === focusedBusId && Number.isFinite(b.lat) && Number.isFinite(b.lng)) ||
+        liveBuses.find((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng));
+
       if (activeBus) {
         const points: [number, number][] = [
           [activeBus.lat, activeBus.lng],
@@ -271,24 +290,40 @@ export function BusMap({
     }
   }, [liveBuses, focusedBusId, selectedStop]);
 
-  // Center on selected stop or focused bus
+  // Center on selected stop or focused bus safely
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
+    // Check that map container has non-zero size before flying
+    const size = map.getSize();
+    const isVisible = size && size.x > 0 && size.y > 0;
+
     if (focusedBusId) {
       const bus = liveBuses.find((b) => b.id === focusedBusId);
-      if (bus) {
-        map.flyTo([bus.lat, bus.lng], 16, { animate: true, duration: 0.8 });
+      if (bus && Number.isFinite(bus.lat) && Number.isFinite(bus.lng)) {
+        if (isVisible) {
+          map.flyTo([bus.lat, bus.lng], 16, { animate: true, duration: 0.8 });
+        } else {
+          map.setView([bus.lat, bus.lng], 16);
+        }
         return;
       }
     }
 
-    if (selectedStop) {
-      map.flyTo([selectedStop.Latitude, selectedStop.Longitude], 15, {
-        animate: true,
-        duration: 0.8,
-      });
+    if (
+      selectedStop &&
+      Number.isFinite(selectedStop.Latitude) &&
+      Number.isFinite(selectedStop.Longitude)
+    ) {
+      if (isVisible) {
+        map.flyTo([selectedStop.Latitude, selectedStop.Longitude], 15, {
+          animate: true,
+          duration: 0.8,
+        });
+      } else {
+        map.setView([selectedStop.Latitude, selectedStop.Longitude], 15);
+      }
     }
   }, [selectedStop, focusedBusId]);
 

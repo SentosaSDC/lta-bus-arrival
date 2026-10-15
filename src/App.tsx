@@ -128,25 +128,25 @@ export default function App() {
       // Update live moving bus markers smoothly
       setLiveBuses((prev) => {
         if (!prev.length || !selectedStop) return prev;
-        return prev.map((bus) => {
-          const nextSec = Math.max(0, bus.secondsAway - 1);
-          // Interpolate GPS coordinates closer to the stop as seconds decrease
-          const approachFactor = Math.max(0, nextSec / Math.max(bus.secondsAway, 1));
-          const targetLat = selectedStop.Latitude;
-          const targetLng = selectedStop.Longitude;
+        const targetLat = selectedStop.Latitude;
+        const targetLng = selectedStop.Longitude;
+        if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) return prev;
 
-          const currentLat = bus.lat;
-          const currentLng = bus.lng;
+        return prev.map((bus) => {
+          const currentLat = Number.isFinite(bus.lat) ? bus.lat : targetLat;
+          const currentLng = Number.isFinite(bus.lng) ? bus.lng : targetLng;
+          const currentSec = Number.isFinite(bus.secondsAway) ? bus.secondsAway : 0;
+          const nextSec = Math.max(0, currentSec - 1);
 
           const newLat = nextSec <= 0 ? targetLat : currentLat + (targetLat - currentLat) * 0.035;
           const newLng = nextSec <= 0 ? targetLng : currentLng + (targetLng - currentLng) * 0.035;
 
           return {
             ...bus,
-            lat: newLat,
-            lng: newLng,
+            lat: Number.isFinite(newLat) ? newLat : targetLat,
+            lng: Number.isFinite(newLng) ? newLng : targetLng,
             secondsAway: nextSec,
-            speed: nextSec <= 5 ? 0 : bus.speed,
+            speed: nextSec <= 5 ? 0 : (Number.isFinite(bus.speed) ? bus.speed : 30),
           };
         });
       });
